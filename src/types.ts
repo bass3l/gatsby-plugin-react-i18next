@@ -13,6 +13,7 @@ export type PluginOptions = {
   languages: string[];
   defaultLanguage: string;
   path: string;
+  langPath: Record<string, string>;
   redirect: boolean;
   siteUrl?: string;
   i18nextOptions: InitOptions;

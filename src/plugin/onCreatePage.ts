@@ -5,6 +5,7 @@ import fs from 'fs';
 import util from 'util';
 import {match} from 'path-to-regexp';
 import {PageContext, PageOptions, PluginOptions, Resources} from '../types';
+import axios from 'axios';
 
 const readFile = util.promisify(fs.readFile);
 const glob = util.promisify(_glob);
@@ -17,6 +18,19 @@ const getResources = async (path: string, language: string) => {
       const [, ns] = /[\/(\w+)]+\/(\w+)\.json/.exec(file)!;
       const content = await readFile(file, 'utf8');
       result[language][ns] = JSON.parse(content);
+      return result;
+    },
+    {[language]: {}}
+  );
+};
+
+const getResourcesFromCloud = async (path: string, language: string) => {
+  return BP.reduce<string, Resources>(
+    [path],
+    async (result, file) => {
+      const content = await axios.get(file);
+      const [, ns] = /[\/(\w+)]+\/(\w+)\.json/.exec(file)!;
+      result[language][ns] = content.data;
       return result;
     },
     {[language]: {}}
@@ -49,24 +63,45 @@ export const onCreatePage = async (
     routed = false,
     pageOptions
   }: GeneratePageParams): Promise<Page<PageContext>> => {
-    const resources = await getResources(pluginOptions.path, language);
-    return {
-      ...page,
-      path,
-      context: {
-        ...page.context,
-        language,
-        i18n: {
+    if (pluginOptions.langPath !== null) {
+      const resources = await getResourcesFromCloud(pluginOptions.langPath[language], language);
+      return {
+        ...page,
+        path,
+        context: {
+          ...page.context,
           language,
-          languages: pageOptions?.languages || languages,
-          defaultLanguage,
-          routed,
-          resources,
-          originalPath,
-          path
+          i18n: {
+            language,
+            languages: pageOptions?.languages || languages,
+            defaultLanguage,
+            routed,
+            resources,
+            originalPath,
+            path
+          }
         }
-      }
-    };
+      };
+    } else {
+      const resources = await getResources(pluginOptions.path, language);
+      return {
+        ...page,
+        path,
+        context: {
+          ...page.context,
+          language,
+          i18n: {
+            language,
+            languages: pageOptions?.languages || languages,
+            defaultLanguage,
+            routed,
+            resources,
+            originalPath,
+            path
+          }
+        }
+      };
+    }
   };
 
   const pageOptions = pages.find((opt) => match(opt.matchPath)(page.path));
